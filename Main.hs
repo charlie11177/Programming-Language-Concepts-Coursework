@@ -11,3 +11,9 @@ main = do
   putStrLn ("Lexing: " ++ sourceText)
   let lexedProg = alexScanTokens sourceText
   putStrLn ("Lexed as: " ++ show lexedProg)
+
+
+lexProg ::  String ->  IO ([Token])
+lexProg path = do
+  sourceText <- readFile path
+  return (alexScanTokens sourceText)
