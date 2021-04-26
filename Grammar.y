@@ -1,5 +1,6 @@
 {
 	module Parsing where
+	import Tokens
 }
 
 %name parse
@@ -11,6 +12,7 @@
 	from		{ TokenFrom }
 	where 		{ TokenWhere }
 	crossJoin	{ TokenCrossJoin }
+	concatJoin  { TokenConcatJoin }
 	as 			{ TokenAs }	
 	collect		{ TokenCollect }
 	sequential  { TokenSequential }
@@ -30,7 +32,7 @@
 	int         { TokenInt $$ }
 	labelAst    { TokenLabelledAsterisk $$ }
 	ast         { TokenAst }
-
+	label       { TokenLabel $$ } 
 %%
 
 Dummy 	: select from where 	{ DummyExp }

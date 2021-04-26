@@ -1,1 +1,8 @@
-SELECT a* b[2] 3 FROM CROSS JOIN a.csv b.csv
+SELECT 0 2 3 4 
+	FROM 
+		SELECT 
+			as[0] 
+			bs[0] 
+			COLLECT ( SELECT PREDPICK ( NOT aelem[0] EQUALS "" ) aelem[0] belem[0] FROM CONCAT JOIN ( SEQUENTIAL as* ) AS aelem ( SEQUENTIAL bs* ) AS belem ) 
+				FROM CROSS JOIN a.csv AS as b.csv AS bs WHERE 0 EQUALS 1
+				

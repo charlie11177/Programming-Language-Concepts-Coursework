@@ -17,6 +17,7 @@ tokens :-
   FROM                                      { \s -> TokenFrom }
   WHERE                                     { \s -> TokenWhere }
   CROSS$white JOIN                          { \s -> TokenCrossJoin }
+  CONCAT$white JOIN                         { \s -> TokenConcatJoin }
   AS                                        { \s -> TokenAs }
   COLLECT                                   { \s -> TokenCollect }
   SEQUENTIAL                                { \s -> TokenSequential }
@@ -36,6 +37,7 @@ tokens :-
   $digit+                                   { \s -> TokenInt (read s) }
   @id\*                                     { \s -> TokenLabelledAsterisk (init s)}
   \*                                        { \s -> TokenAsterisk}
+  @id                                       { \s -> TokenLabel s }
 
 {
 -- Each action has type :: String -> Token
@@ -45,6 +47,7 @@ data Token =
     TokenFrom |
     TokenAnd |
     TokenCrossJoin |
+    TokenConcatJoin |
     TokenConst String |
     TokenLabelledIndex String Int |
     TokenInt Int |
@@ -52,7 +55,6 @@ data Token =
     TokenFile String |
     TokenLabelledAsterisk String |
     TokenWhere |
-    TokenAnd |
     TokenOr |
     TokenXOr |
     TokenNot |
@@ -64,7 +66,8 @@ data Token =
     TokenAs |
     TokenCollect |
     TokenSequential |
-    TokenPredPick
+    TokenPredPick |
+    TokenLabel String
   deriving (Eq,Show)
 
 upToOccurrence :: Char -> String  -> String
