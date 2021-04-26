@@ -1,1 +1,1 @@
-CROSS JOIN
+SELECT a* b[2] 3 FROM CROSS JOIN a.csv b.csv
