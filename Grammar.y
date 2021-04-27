@@ -1,5 +1,5 @@
 {
-module Parsing where
+module Grammar where
 import Tokens
 }
 
@@ -13,7 +13,7 @@ import Tokens
     where       { TokenWhere }
     crossJoin   { TokenCrossJoin }
     concatJoin  { TokenConcatJoin }
-    as          { TokenAs } 
+    as          { TokenAs }
     collect     { TokenCollect }
     sequential  { TokenSequential }
     predPick    { TokenPredPick }
@@ -32,18 +32,18 @@ import Tokens
     int         { TokenInt $$ }
     labelAst    { TokenLabelledAsterisk $$ }
     ast         { TokenAsterisk }
-    label       { TokenLabel $$ } 
+    label       { TokenLabel $$ }
 
 
 %%
 
 Statement : file 									{ CSVStatement (File $1) }
 		  | QuerySpec 								{ QueryStatement ($1)}
-	
-QuerySpec : select SelectList				 		{ BasicQuerySpec ($2) }
-		  | select SelectList TableExpr 			{ QuerySpec $2 $3 } 
 
-SelectList : SelectList SelectList                  { $1 ++ $2 } 
+QuerySpec : select SelectList				 		{ BasicQuerySpec ($2) }
+		  | select SelectList TableExpr 			{ QuerySpec $2 $3 }
+
+SelectList : SelectList SelectList                  { $1 ++ $2 }
 		   | ast 									{ [Asterisk] }
 		   | labelAst 								{ [LabelledAsterisk $1] }
 		   | ColIdent 								{ [IdentifiedElement $1] }
@@ -72,7 +72,7 @@ ComparisonOperator : equals 						{ EqualsOperator }
 
 
 
-TableExpr : where 									{ JustWhereExpr ( WhereClause (ComparisonOperation (Constant "") EqualsOperator (Constant ""))  ) } 
+TableExpr : where 									{ JustWhereExpr ( WhereClause (ComparisonOperation (Constant "") EqualsOperator (Constant ""))  ) }
 
 TableReference : file 								{ CSV (File $1) }
 
@@ -99,14 +99,14 @@ data QuerySpec =
 			qsTableExpr :: TableExpr
 		}
 	|   BasicQuerySpec {
-			bqsElements :: SelectList 
+			bqsElements :: SelectList
 		}
 
 type SelectList = [SelectElement]
 
 data SelectElement =
 		Asterisk
-	|   LabelledAsterisk { 
+	|   LabelledAsterisk {
 			seLabel :: String
 		}
 	|   IdentifiedElement ColIdent -- TODO
@@ -152,7 +152,7 @@ data TableReference =
 
 data SubQuery =
 		ElementTransform {
-			sqElements :: SelectList 
+			sqElements :: SelectList
 		}
 	|   SubQuery {
 			subquerySpec :: QuerySpec
@@ -176,7 +176,7 @@ data ConcatJoinTable =
 
 data WhereClause = WhereClause Predicate
 
-data Predicate = 
+data Predicate =
 		BinaryBoolOperation {
 			bboOperandA :: Predicate,
 			bboOperator :: BooleanOperator,
@@ -206,7 +206,7 @@ data ColGen = ColGen {
 type ColLabel = String
 
 
-data CSVFile = 
+data CSVFile =
 		File {
 			filename :: String
 		}
