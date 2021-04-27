@@ -1,6 +1,6 @@
 {
-    module Parsing where
-    import Tokens
+module Parsing where
+import Tokens
 }
 
 %name parse
@@ -31,139 +31,138 @@
     labelIdx    { TokenLabelledIndex _ _ }
     int         { TokenInt $$ }
     labelAst    { TokenLabelledAsterisk $$ }
-    ast         { TokenAst }
+    ast         { TokenAsterisk }
     label       { TokenLabel $$ } 
 %%
 
-Statement : select {CSV(File "")}
+Statement : select {CSVStatement (File "")}
 
 {
 
-    parseError :: [Token] -> a
-    parseError _ = error "Parse error"
-    
-    data Statement =
-            QueryStatement {
-                query :: QuerySpec,
-            }
-        |   CSV {
-                file :: CSVFile
-            }
+parseError :: [Token] -> a
+parseError _ = error "Parse error"
 
-    data QuerySpec =
-            QuerySpec {
-                elements :: [SelectElement],
-                tableExpr :: TableExpr
-            }
-        |   BasicQuerySpec {
-                elements :: [SelectElement]
-            }
-    
-    data SelectElement =
-            Asterisk
-        |   LabelledAsterisk { 
-                label :: String
-            }
-        |   ColIdent -- TODO
-        |   InterrowQuery -- TODO
+data Statement =
+		QueryStatement {
+			qsQuery :: QuerySpec
+		}
+	|   CSVStatement {
+			sFile :: CSVFile
+		}
 
-    data ColIdent =
-            LabelIndex {
-                label :: String,
-                index :: Int
-            }
-        |   Constant {
-                value :: String
-            }
-        |   Index {
-                index :: Int
-            }
-        |   GeneratedColumn {
-                generator :: ColGen
-            }
+data QuerySpec =
+		QuerySpec {
+			qsElements :: [SelectElement],
+			qsTableExpr :: TableExpr
+		}
+	|   BasicQuerySpec {
+			bqsElements :: [SelectElement]
+		}
 
-    data TableExpr =
-            NoWhereExpr {
-                tableRef :: TableReference
-            }
-        |   WithWhereExpr {
-                tableRef :: TableReference,
-                whereClause :: WhereClause
-            }
-        |   JustWhereExpr {
-                whereClause :: WhereClause
-            }
-    
-    data TableReference =
-            JoinTableRef {
-                table :: JoinedTable
-            }
-        |   SubQueryRef {
-                query :: SubQuery
-            }
-        |   CSV {
-                file :: CSVFile
-            }
-    
-    data SubQuery =
-            ElementTransform {
-                [SelectElement] :: elements
-            }
-        |   SubQuery {
-                query :: QuerySpec
-            }
+data SelectElement =
+		Asterisk
+	|   LabelledAsterisk { 
+			seLabel :: String
+		}
+	|   ColIdent -- TODO
+	|   InterrowQuery -- TODO
 
-    data JoinedTable =
-            JoinedTable CrossJoinTable,
-        |   JoinedTable ConcatJoinTable
+data ColIdent =
+		LabelIndex {
+			ciLabel :: String,
+			ciIndex :: Int
+		}
+	|   Constant {
+			ciValue :: String
+		}
+	|   Index {
+			ciIndex :: Int
+		}
+	|   GeneratedColumn {
+			ciGenerator :: ColGen
+		}
 
-    data CrossJoinTable =
-            CrossJoinTable TableReference TableReference,
-        |   CrossJoinTable TableReference ColLabel TableReference,
-        |   CrossJoinTable TableReference TableReference ColLabel,
-        |   CrossJoinTable TableReference ColLabel TableReference ColLabel
+data TableExpr =
+		NoWhereExpr {
+			nwTableRef :: TableReference
+		}
+	|   WithWhereExpr {
+			wwTableRef :: TableReference,
+			wwWhereClause :: WhereClause
+		}
+	|   JustWhereExpr {
+			jwWhereClause :: WhereClause
+		}
 
-    data ConcatJoinTable =
-            ConcatJoinTable TableReference TableReference,
-        |   ConcatJoinTable TableReference ColLabel TableReference,
-        |   ConcatJoinTable TableReference TableReference ColLabel,
-        |   ConcatJoinTable TableReference ColLabel TableReference ColLabel
-    
-    data WhereClause = WhereClause Predicate
+data TableReference =
+		JoinTableRef {
+			jtrTable :: JoinedTable
+		}
+	|   SubQueryRef {
+			sqrQuery :: SubQuery
+		}
+	|   CSV {
+			csvFile :: CSVFile
+		}
 
-    data Predicate = 
-            BinaryBoolOperation {
-                operandA :: Predicate,
-                operator :: BooleanOperator,
-                operandB :: Predicate
-            }
-        |   NotOperation {
-                operand :: Predicate
-            }
-        |   ComparisonOperation {
-                operandA :: ColIdent,
-                operator :: ComparisonOperator,
-                operandB :: ColIdent
-            }
+data SubQuery =
+		ElementTransform {
+			sqElements :: [SelectElement]
+		}
+	|   SubQuery {
+			subquerySpec :: QuerySpec
+		}
 
-    data BooleanOperator = AndOperator | OrOperator | XOrOperator
+data JoinedTable =
+		CrossJoinedTable CrossJoinTable
+	|   ConcatJoinedTable ConcatJoinTable
 
-    data ComparisonOperator = EqualsOperator | LTOperator | GTOperator
+data CrossJoinTable =
+		CrossJoinTable TableReference TableReference
+	|   CrossJoinTableLL TableReference ColLabel TableReference
+	|   CrossJoinTableRL TableReference TableReference ColLabel
+	|   CrossJoinTableLRL TableReference ColLabel TableReference ColLabel
 
-    data InterRowQuery = InterRowQuery { table :: TableReference } -- collect statement
-    
-    data ColGen = ColGen {
-                predicate :: Predicate,
-                colA :: ColIdent,
-                colB :: ColIdent
-            }
+data ConcatJoinTable =
+		ConcatJoinTable TableReference TableReference
+	|   ConcatJoinTableLL TableReference ColLabel TableReference
+	|   ConcatJoinTableRL TableReference TableReference ColLabel
+	|   ConcatJoinTableLRL TableReference ColLabel TableReference ColLabel
 
-    type ColLabel = String
+data WhereClause = WhereClause Predicate
 
-    data WhereClause = WhereClause Predicate
-    
-    data CSVFile = 
-            File {
-                filename :: String
-            }
+data Predicate = 
+		BinaryBoolOperation {
+			bboOperandA :: Predicate,
+			bboOperator :: BooleanOperator,
+			bboOperandB :: Predicate
+		}
+	|   NotOperation {
+			noOperand :: Predicate
+		}
+	|   ComparisonOperation {
+			coOperandA :: ColIdent,
+			coOperator :: ComparisonOperator,
+			coOperandB :: ColIdent
+		}
+
+data BooleanOperator = AndOperator | OrOperator | XOrOperator
+
+data ComparisonOperator = EqualsOperator | LTOperator | GTOperator
+
+data InterRowQuery = InterRowQuery { irqTable :: TableReference } -- collect statement
+
+data ColGen = ColGen {
+			cgPredicate :: Predicate,
+			cgColA :: ColIdent,
+			cgColB :: ColIdent
+		}
+
+type ColLabel = String
+
+
+data CSVFile = 
+		File {
+			filename :: String
+		}
 }
