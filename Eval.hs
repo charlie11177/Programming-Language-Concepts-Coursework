@@ -1,5 +1,5 @@
---module Eval --where
---import Grammar
+module Eval where
+import Grammar
 import Data.List
 
 type Table = [(String, Int, [String])]
