@@ -4,8 +4,8 @@ import Data.List
 
 type Table = [(String, Int, [String])]
 
-processFile :: String -> IO Table
-processFile path = do
+processFile :: CSVFile -> IO Table
+processFile (File path) = do
   sourceText <- readFile path
   let name = take (length path - 4) path
   let cols = splitCols sourceText
