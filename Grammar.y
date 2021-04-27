@@ -51,8 +51,24 @@ SelectList : SelectList SelectList                  { $1 ++ $2 }
 
 ColIdent : labelIdx 								{ (\(TokenLabelledIndex label idx) -> LabelIndex label idx) $1 }
 		 | const 									{ Constant $1 }
+		 | int 										{ Index $1 }
+		 | ColGen 									{ GeneratedColumn $1 }
 
 InterRowQuery : collect TableReference 				{ InterRowQuery $2 }
+
+ColGen : predPick Predicate ColIdent ColIdent 		{ ColGen $2 $3 $4 }
+
+Predicate : not lParen Predicate lParen				{ NotOperation $3 }
+		  | Predicate BinaryBoolOperator Predicate  { BinaryBoolOperation $1 $2 $3 }
+		  | ColIdent ComparisonOperator ColIdent 	{ ComparisonOperation $1 $2 $3 }
+
+BinaryBoolOperator : and 							{ AndOperator }
+				   | or 							{ OrOperator }
+				   | xor 							{ XOrOperator }
+
+ComparisonOperator : equals 						{ EqualsOperator }
+				   | lt 							{ LTOperator }
+				   | gt 							{ GTOperator }
 
 
 
