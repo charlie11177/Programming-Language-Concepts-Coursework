@@ -1,11 +1,14 @@
---module Eval --where
---import Grammar
+module Eval where
+import Grammar
 import Data.List
 
 type Table = [(String, Int, [String])]
 
-processFile :: String -> IO Table
-processFile path = do
+eval1 :: Statement -> IO Table
+eval1 (CSVStatement x) = processFile x
+
+processFile :: CSVFile -> IO Table
+processFile (File path) = do
   sourceText <- readFile path
   let name = take (length path - 4) path
   let cols = splitCols sourceText
