@@ -7,6 +7,11 @@ type Table = [(String, Int, [String])]
 eval1 :: Statement -> IO Table
 eval1 (CSVStatement x) = processFile x
 
+printTable :: Table -> IO ()
+printTable tb = mapM_ putStrLn (map (intercalate "," ) (transpose (map getRow tb)))
+  where getRow (_, _, xs) = xs
+
+
 processFile :: CSVFile -> IO Table
 processFile (File path) = do
   sourceText <- readFile path
