@@ -33,9 +33,36 @@ import Tokens
     labelAst    { TokenLabelledAsterisk $$ }
     ast         { TokenAsterisk }
     label       { TokenLabel $$ } 
+
+
 %%
 
-Statement : select {CSVStatement (File "")}
+Statement : file 									{ CSVStatement (File $1) }
+		  | QuerySpec 								{ QueryStatement ($1)}
+	
+QuerySpec : select SelectList				 		{ BasicQuerySpec ($2) }
+		  | select SelectList TableExpr 			{ QuerySpec $2 $3 } 
+
+SelectList : SelectList SelectList                  { $1 ++ $2 } 
+		   | ast 									{ [Asterisk] }
+		   | labelAst 								{ [LabelledAsterisk $1] }
+		   | ColIdent 								{ [IdentifiedElement $1] }
+		   | InterRowQuery 							{ [IRQ $1] }
+
+ColIdent : labelIdx 								{ (\(TokenLabelledIndex label idx) -> LabelIndex label idx) $1 }
+		 | const 									{ Constant $1 }
+
+InterRowQuery : collect TableReference 				{ InterRowQuery $2 }
+
+
+
+TableExpr : where 									{ JustWhereExpr ( WhereClause (ComparisonOperation (Constant "") EqualsOperator (Constant ""))  ) } 
+
+TableReference : file 								{ CSV (File $1) }
+
+
+
+
 
 {
 
@@ -52,20 +79,22 @@ data Statement =
 
 data QuerySpec =
 		QuerySpec {
-			qsElements :: [SelectElement],
+			qsElements :: SelectList,
 			qsTableExpr :: TableExpr
 		}
 	|   BasicQuerySpec {
-			bqsElements :: [SelectElement]
+			bqsElements :: SelectList 
 		}
+
+type SelectList = [SelectElement]
 
 data SelectElement =
 		Asterisk
 	|   LabelledAsterisk { 
 			seLabel :: String
 		}
-	|   ColIdent -- TODO
-	|   InterrowQuery -- TODO
+	|   IdentifiedElement ColIdent -- TODO
+	|   IRQ InterRowQuery -- TODO
 
 data ColIdent =
 		LabelIndex {
@@ -107,7 +136,7 @@ data TableReference =
 
 data SubQuery =
 		ElementTransform {
-			sqElements :: [SelectElement]
+			sqElements :: SelectList 
 		}
 	|   SubQuery {
 			subquerySpec :: QuerySpec
