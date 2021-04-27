@@ -4,6 +4,9 @@ import Data.List
 
 type Table = [(String, Int, [String])]
 
+eval1 :: Statement -> IO Table
+eval1 (CSVStatement x) = processFile x
+
 processFile :: CSVFile -> IO Table
 processFile (File path) = do
   sourceText <- readFile path
