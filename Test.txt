@@ -1,1 +1,1 @@
-a.csv
+SELECT * FROM a.csv

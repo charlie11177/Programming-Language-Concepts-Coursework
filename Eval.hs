@@ -6,6 +6,7 @@ type Table = [(String, Int, [String])]
 
 eval :: Statement -> IO Table
 eval (CSVStatement x) = processFile x
+eval (QueryStatement (QuerySpec ([Asterisk]) (NoWhereExpr (CSV x)))) = processFile x
 --eval (QueryStatement (BasicQuerySpec ))
 
 unparse :: Table -> String
