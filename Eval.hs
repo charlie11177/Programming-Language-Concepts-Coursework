@@ -8,44 +8,66 @@ eval :: Statement -> IO Table
 eval (CSVStatement x) = processFile x
 eval (QueryStatement qs) = evalQuerySpec qs Nothing
 
-selectCols :: SelectList -> Table -> IO Table --TODO: IO monad stuff
+selectColByCI :: ColIdent -> Maybe Table -> Maybe (Maybe String, Maybe Int, [String])
+selectColByCI (Constant ciValue) _ = Just (Nothing, Nothing, [ciValue..])
+selectColByCI (GeneratedColumn (ColGen predicate colA colB)) scope | colAResult == Nothing || colBResult == Nothing = Nothing
+                                                                   | otherwise                                      = Just (Nothing, Nothing, [switchOnResult predResult colAElem colBElem | ((predResult,colAElem),colBElem)<-zip (zip predicateResults (extractContent colAResult)) (extractContent colBResult)])
+  where
+    switchOnResult :: Bool -> String -> String -> String
+    switchOnResult True aElem _ = aElem
+    switchOnResult False _ bElem = bElem
+    colAResult = selectColByCI colA scope
+    colBResult = selectColByCI colA scope
+    predicateResults = applyPredicate predicate scope
+    extractContent :: Maybe (Maybe String, Maybe Int, [String]) -> [String]
+    extractContent Nothing = error "unreachable"
+    extractContent (Just (label, index, content)) = content
+selectColByCI _ Nothing = Nothing
+selectColByCI (LabelIndex ciLabel ciIndex) (Just scope) = Just (head (filter (\(a, b, c) -> (filterOp a b)) scope))
+  where
+    filterOp :: Maybe String -> Maybe Int -> Bool
+    filterOp Nothing _ = False
+    filterOp _ Nothing = False
+    filterOp (Just colLabel) (Just colIndex) = colLabel == ciLabel && ciIndex == colIndex
+selectColByCI (Index index) (Just scope) = Just (scope!!index)
+
+
+selectCols :: SelectList -> Maybe Table -> IO Table --TODO: IO monad stuff
 selectCols sl scope = do
                       subTables <- mapM (\element -> selectColsBySE element scope) sl --TODO: shorten infinite length columns to be the length of the rest of the table
                       return (concat subTables)
   where
-    selectColsBySE :: SelectElement -> Table -> IO Table
-    selectColsBySE se scope = return (filter (checkSE se) scope)
-    selectColsBySE Asterisk scope = return scope
-    selectColsBySE (LabelledAsterisk seLabel) scope = return (filter (\(colLabel, index, col) -> colLabel == seLabel) scope)
-    selectColsBySE (IdentifiedElement colIdent) scope = return [selectColByCI colIdent scope]
+    selectColsBySE :: SelectElement -> Maybe Table -> IO Table
+    selectColsBySE Asterisk Nothing = return []
+    selectColsBySE Asterisk (Just scope) = return scope
+    selectColsBySE (LabelledAsterisk seLabel) (Just scope) = return (filter (\(colLabel, index, col) -> filterOp colLabel) scope)
       where
-        selectColByCI :: ColIdent -> Table -> (Maybe String, Maybe Int, [String])
-        selectColByCI (LabelIndex ciLabel ciIndex) scope = head (filter (\(colLabel, colIndex, col) -> colLabel == ciLabel && ciIndex == colIndex) scope)
-        selectColByCI (Constant ciValue) _ = (Nothing, Nothing, [ciValue..])
-        selectColByCI (Index index) scope = scope!!index
-        selectColByCI (GeneratedColumn (ColGen predicate colA colB)) scope = (Nothing, Nothing, [switchOnResult predResult colAElem colBElem | (predResult,colAElem,colBElem)<-zip (zip predicate colA) colB])
-          where
-            switchOnResult :: Bool -> String -> String -> String
-            switchOnResult True aElem _ = aElem
-            switchOnResult False _ bElem = bElem
-            colAContents = (\(_,_,contents)->contents) (selectColByCI colA scope)
-            colBContents = (\(_,_,contents)->contents) (selectColByCI colA scope)
-            predicateResults = applyPredicate predicate scope
-    selectColsBySE (InterRowQuery irq) scope = evalInterRowQuery irq scope
+        filterOp :: Maybe String -> Bool
+        filterOp Nothing = False
+        filterOp (Just str) = str == seLabel
+    selectColsBySE (IdentifiedElement colIdent) scope = case elementResult of
+                                                          Nothing  -> return []
+                                                          (Just a) -> return [a]
+      where
+        elementResult = selectColByCI colIdent scope
+    selectColsBySE (IRQ _) Nothing = error "Inter-Row queries require a FROM block to be provided"
+    selectColsBySE (IRQ irq) (Just scope) = evalInterRowQuery irq scope
 
 evalInterRowQuery :: InterRowQuery -> Table -> IO Table
-evalInterRowQuery (InterRowQuery tableRef) scope = map (\(_,_,col) -> (Nothing, Nothing, transpose col) untransposedRows
+evalInterRowQuery (InterRowQuery tableRef) scope = return untransposedRows
   where
-  getRecords :: [(Maybe String, Maybe Int, [String])] -> [[(Maybe String, Maybe Int, String)]]
-    getRecords columns = transpose expandedCols
-    where
-      expandedCols = [ map (\contents -> (label, index, contents)) col | (label, index, col) <- columns]
-      evaluatedTables = [evalTableReference tableRef row | row <- getRecords scope]
-      untransposedRows = map head evaluatedTables
+    expandedCols = [ map (\cell -> (label, index, cell)) col | (label, index, col) <- scope]
+    records = transpose expandedCols
+    evaluatedTables = mapM (\row -> evalTableReference tableRef (Just row)) records
+    untransposedRows = mapM (\content -> (Nothing, Nothing, content)) (transpose (mapM (\((label, index, contents) : _) -> contents  ) evaluatedTables))
 
-applyPredicate :: Predicate -> Table -> [Bool]
-applyPredicate PredValueTrue _ = [True..]
-applyPredicate PredValueFalse _ = [False..]
+repeatForever :: a -> [a]
+repeatForever x = xs
+    where xs = x : xs
+
+applyPredicate :: Predicate -> Maybe Table -> [Bool]
+applyPredicate PredValueTrue _ = repeatForever True
+applyPredicate PredValueFalse _ = repeatForever False
 applyPredicate (BracketedPredicate predicate) scope = applyPredicate predicate scope
 applyPredicate (NotOperation predicate) scope = [not value | value <- (applyPredicate predicate scope)]
 applyPredicate (BinaryBoolOperation predA operator predB) scope = [(opToFunction operator) aResult bResult | (aResult, bResult) <- zip (applyPredicate predA scope) (applyPredicate predB scope)]
@@ -54,12 +76,10 @@ applyPredicate (BinaryBoolOperation predA operator predB) scope = [(opToFunction
     opToFunction AndOperator = (&&)
     opToFunction OrOperator = (||)
     opToFunction XOrOperator = (\a b -> (a||b) && not(a==b))
-
-
 applyPredicate (ComparisonOperation colA operator colB) scope = [(opToFunction operator) aElem bElem | (aElem, bElem) <- zip colAContents colBContents]
   where
-    colAContents = (\(_,_,contents)->contents) (selectColByCI colA scope)
-    colBContents = (\(_,_,contents)->contents) (selectColByCI colA scope)
+    colAContents = (\(_,_,contents)->contents) <$> (selectColByCI colA scope)
+    colBContents = (\(_,_,contents)->contents) <$> (selectColByCI colA scope)
     opToFunction :: ComparisonOperator -> (String -> String -> Bool)
     opToFunction EqualsOperator = (==)
     opToFunction LTOperator = (<)
@@ -67,10 +87,8 @@ applyPredicate (ComparisonOperation colA operator colB) scope = [(opToFunction o
 
 
 evalQuerySpec :: QuerySpec -> Maybe [(Maybe String, Maybe Int, String)] -> IO Table
-evalQuerySpec (QuerySpec sl te) row = selectCols sl (evaluateTableExpr te)
-  where
-    scope = evalTableExpr te row
-    getRecords :: Table -> [[(String, Int, String)]]
+evalQuerySpec (QuerySpec sl te) row = do
+  selectCols sl (evalTableExpr te row)
 evalQuerySpec (BasicQuerySpec sl) _ = selectCols sl []
 
 
@@ -81,7 +99,7 @@ evalTableExpr (NoWhereExpr tr) row = do
                                   return (Just table)
 evalTableExpr (WithWhereExpr tr wc) row = do
                                       table <- evalTableReference tr row
-                                      filteredTable = evalWhereClause table wc
+                                      let filteredTable = evalWhereClause wc table
                                       return (Just filteredTable)
 evalTableExpr (JustWhereExpr wc) _ | evalWhereClause wc = return (Just [])
                                    | otherwise = return Nothing
@@ -93,11 +111,11 @@ evalTableReference (SubQueryRef sqr) row = evalSubQuery sqr row
 evalTableReference (CSV csv) row = processFile csv
 
 evalSubQuery :: SubQuery -> Maybe [(Maybe String, Maybe Int, String)] -> IO Table
-evalSubQuery (QuerySpec qs) row = evalQuerySpec qs row
+evalSubQuery (SubQuery qs) row = evalQuerySpec qs row
 evalSubQuery (ElementTransform sl) row = [(Nothing, Nothing, selectFromRow sl row)]
   where
     selectFromRow :: SelectList -> Maybe [(Maybe String, Maybe Int, String)] -> [String] --TODO: IO monad stuff
-    selectCols sl row = do
+    selectFromRow sl row = do
                           subTables <- mapM (\element -> selectColsBySE element row) sl --TODO: shorten infinite length columns to be the length of the rest of the table
                           return (concat subTables)
       where
@@ -119,25 +137,24 @@ evalSubQuery (ElementTransform sl) row = [(Nothing, Nothing, selectFromRow sl ro
                 switchOnResult False _ bElem = bElem
                 colAContents = selectColByCI colA row
                 colBContents = selectColByCI colA scope
-                predicateResults = applyPredicate predicate scope
 
                 applyPredicateRow :: Predicate -> [(Maybe String, Maybe Int, String)] -> Bool
                 applyPredicateRow PredValueTrue _ = True
                 applyPredicateRow PredValueFalse _ = False
                 applyPredicateRow (NotOperation predicate) row = not (applyPredicateRow predicate row)
-                applyPredicateRow (BooleanOperation predicateA operator predicateB) row = (opToFunction operator) (applyPredicateRow predicateA row) (applyPredicateRow predicateB row)
+                applyPredicateRow (BinaryBoolOperation predicateA operator predicateB) row = (opToFunction operator) (applyPredicateRow predicateA row) (applyPredicateRow predicateB row)
                   where
                     opToFunction :: BooleanOperator -> (Bool -> Bool -> Bool)
                     opToFunction AndOperator = (&&)
                     opToFunction OrOperator = (||)
                     opToFunction XOrOperator = (\a b -> (a||b) && not(a==b))
-              applyPredicateRow (ComparisonOperation colA operator colB) row = (opToFunction operator) (selectColByCI colA) (selectColByCI colB)
-                where
-                  opToFunction :: ComparisonOperator -> (String -> String -> Bool)
-                  opToFunction EqualsOperator = (==)
-                  opToFunction LTOperator = (<)
-                  opToFunction GTOperator = (>)
-        selectColsBySE (InterRowQuery irq) scope = error "You cannot perform an InterRowQuery whilst already within another row's scope"
+                applyPredicateRow (ComparisonOperation colA operator colB) row = (opToFunction operator) (selectColByCI colA) (selectColByCI colB)
+                  where
+                    opToFunction :: ComparisonOperator -> (String -> String -> Bool)
+                    opToFunction EqualsOperator = (==)
+                    opToFunction LTOperator = (<)
+                    opToFunction GTOperator = (>)
+        selectColsBySE (IRQ irq) scope = error "You cannot perform an InterRowQuery whilst already within another row's scope"
 
 evalCrossJoinTable :: CrossJoinTable -> [(Maybe String, Maybe Int, String)] ->  IO Table
 evalCrossJoinTable (CrossJoinTable tr1 tr2) row = do
@@ -176,7 +193,7 @@ reLabel tbl lbl = do
 
 
 evalConcatJoinTable :: ConcatJoinTable -> [(Maybe String, Maybe Int, String)] -> IO Table
-evalConcatJoinTable (ConcatJoinTable tr1 tr2) = do
+evalConcatJoinTable (ConcatJoinTable tr1 tr2) row = do
   table1 <- evalTableReference tr1 row
   table2 <- evalTableReference tr2 row
   let aLength = (\(_,_,cols) -> length cols) (head table1)
@@ -185,8 +202,7 @@ evalConcatJoinTable (ConcatJoinTable tr1 tr2) = do
   let cuttable1 = map (\(lb, ind, cols) -> (lb, ind, take shortestLength cols)) table1
   let cuttable2 = map (\(lb, ind, cols) -> (lb, ind, take shortestLength cols)) table2
   return cuttable1 ++ cuttable2
-evalConcatJoinTable :: ConcatJoinTable -> [(Maybe String, Maybe Int, String)] -> IO Table
-evalConcatJoinTable (ConcatJoinTableLL tr1 lbl1 tr2) = do
+evalConcatJoinTable (ConcatJoinTableLL tr1 lbl1 tr2) row = do
   table1 <- evalTableReference tr1 row
   table1 <- reLabel table1 lbl1
   table2 <- evalTableReference tr2 row
@@ -196,8 +212,7 @@ evalConcatJoinTable (ConcatJoinTableLL tr1 lbl1 tr2) = do
   let cuttable1 = map (\(lb, ind, cols) -> (lb, ind, take shortestLength cols)) table1
   let cuttable2 = map (\(lb, ind, cols) -> (lb, ind, take shortestLength cols)) table2
   return cuttable1 ++ cuttable2
-evalConcatJoinTable :: ConcatJoinTable -> [(Maybe String, Maybe Int, String)] -> IO Table
-evalConcatJoinTable (ConcatJoinTableRL tr1 tr2 lbl2) = do
+evalConcatJoinTable (ConcatJoinTableRL tr1 tr2 lbl2) row = do
   table1 <- evalTableReference tr1 row
   table2 <- evalTableReference tr2 row
   table2 <- reLabel table2 lbl2
@@ -207,8 +222,7 @@ evalConcatJoinTable (ConcatJoinTableRL tr1 tr2 lbl2) = do
   let cuttable1 = map (\(lb, ind, cols) -> (lb, ind, take shortestLength cols)) table1
   let cuttable2 = map (\(lb, ind, cols) -> (lb, ind, take shortestLength cols)) table2
   return cuttable1 ++ cuttable2
-evalConcatJoinTable :: ConcatJoinTable -> [(Maybe String, Maybe Int, String)] -> IO Table
-evalConcatJoinTable (ConcatJoinTableRL tr1 lbl1 tr2 lbl2) = do
+evalConcatJoinTable (ConcatJoinTableLRL tr1 lbl1 tr2 lbl2) row = do
   table1 <- evalTableReference tr1 row
   table1 <- reLabel table1 lbl1
   table2 <- evalTableReference tr2 row
@@ -225,7 +239,7 @@ evalWhereClause :: WhereClause -> Table -> Table --TODO: Nothing cases
 evalWhereClause (WhereClause p) scope = [(label, index, [cell | (predResult, cell) <- zip col (applyPredicate p scope), predResult]) | (label, index, col) <- scope]
 unparse :: Table -> String
 
-unparse tb = unlines (map (intercalcate "," ) (transpose (map getRow tb)))
+unparse tb = unlines (map (intercalate "," ) (transpose (map getRow tb)))
   where getRow (_, _, xs) = xs
 
 processFile :: CSVFile -> IO Table
