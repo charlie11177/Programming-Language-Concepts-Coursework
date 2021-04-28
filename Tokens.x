@@ -6,6 +6,8 @@ module Tokens where
 
 $digit = 0-9                            -- digits
 $alpha = [a-zA-Z]                       -- alphabetic characters
+$special    = [\.\;\,\$\|\*\+\?\#\~\-\{\}\(\)\[\]\^\/]
+@string = [$alpha$digit$special]*
 @id = [A-Za-z$digit][A-Za-z'_$digit]*
 @filename = [$alpha$digit]*
 
@@ -32,7 +34,7 @@ tokens :-
   \(                                        { \s -> TokenLParen }
   \)                                        { \s -> TokenRParen}
   @filename.csv                             { \s -> TokenFile s}
-  \"$alpha*\"                               { \s -> TokenConst (tail (init s)) }
+  \"@string\"                               { \s -> TokenConst (tail (init s)) }
   @id\[$digit*\]                            { \s -> TokenLabelledIndex (upToOccurrence '[' s) ( read (upToOccurrence ']' (afterOccurrence '[' s))) }
   $digit+                                   { \s -> TokenInt (read s) }
   @id\*                                     { \s -> TokenLabelledAsterisk (init s)}
