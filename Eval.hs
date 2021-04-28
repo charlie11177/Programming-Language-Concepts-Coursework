@@ -54,12 +54,15 @@ selectCols sl scope = do
     selectColsBySE (IRQ irq) (Just scope) = evalInterRowQuery irq scope
 
 evalInterRowQuery :: InterRowQuery -> Table -> IO Table
-evalInterRowQuery (InterRowQuery tableRef) scope = return untransposedRows
+evalInterRowQuery (InterRowQuery tableRef) scope = do
+                                                   evaluatedTables <- mapM (\row -> evalTableReference tableRef (Just row)) records --[Table]
+                                                   let tableContents = map (\(_,_,cols)->cols) (concat evaluatedTables) --[[String]]
+                                                   let transposedTableContents = transpose tableContents --[[String]]
+                                                   let rebuiltTable = map (\contents -> (Nothing,Nothing,contents)) transposedTableContents --Table
+                                                   return rebuiltTable
   where
     expandedCols = [ map (\cell -> (label, index, cell)) col | (label, index, col) <- scope]
     records = transpose expandedCols
-    evaluatedTables = mapM (\row -> evalTableReference tableRef (Just row)) records
-    untransposedRows = mapM (\content -> (Nothing, Nothing, content)) (transpose (mapM (\((label, index, contents) : _) -> contents  ) evaluatedTables))
 
 repeatForever :: a -> [a]
 repeatForever x = xs
@@ -76,10 +79,13 @@ applyPredicate (BinaryBoolOperation predA operator predB) scope = [(opToFunction
     opToFunction AndOperator = (&&)
     opToFunction OrOperator = (||)
     opToFunction XOrOperator = (\a b -> (a||b) && not(a==b))
-applyPredicate (ComparisonOperation colA operator colB) scope = [(opToFunction operator) aElem bElem | (aElem, bElem) <- zip colAContents colBContents]
+applyPredicate (ComparisonOperation _ _ _ ) Nothing = []
+applyPredicate (ComparisonOperation colA operator colB) (Just scope) = case (colAContents, colBContents) of
+                                                                        (Nothing,Nothing)                -> error "unreachable"
+                                                                        (Just aContents, Just bContents) -> [(opToFunction operator) aElem bElem| (aElem, bElem) <- zip aContents bContents]
   where
-    colAContents = (\(_,_,contents)->contents) <$> (selectColByCI colA scope)
-    colBContents = (\(_,_,contents)->contents) <$> (selectColByCI colA scope)
+    colAContents = (\(_,_,contents)->contents) <$> (selectColByCI colA (Just scope))
+    colBContents = (\(_,_,contents)->contents) <$> (selectColByCI colA (Just scope))
     opToFunction :: ComparisonOperator -> (String -> String -> Bool)
     opToFunction EqualsOperator = (==)
     opToFunction LTOperator = (<)
@@ -87,8 +93,7 @@ applyPredicate (ComparisonOperation colA operator colB) scope = [(opToFunction o
 
 
 evalQuerySpec :: QuerySpec -> Maybe [(Maybe String, Maybe Int, String)] -> IO Table
-evalQuerySpec (QuerySpec sl te) row = do
-  selectCols sl (evalTableExpr te row)
+evalQuerySpec (QuerySpec sl te) row = selectCols sl (evalTableExpr te row)
 evalQuerySpec (BasicQuerySpec sl) _ = selectCols sl []
 
 
