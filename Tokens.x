@@ -24,6 +24,8 @@ tokens :-
   COLLECT                                   { \s -> TokenCollect }
   SEQUENTIAL                                { \s -> TokenSequential }
   PREDPICK                                  { \s -> TokenPredPick }
+  TRUE                                      { \s -> TokenTrue }
+  FALSE                                     { \s -> TokenFalse }
   AND                                       { \s -> TokenAnd }
   OR                                        { \s -> TokenOr }
   XOR                                       { \s -> TokenXOr }
@@ -69,6 +71,8 @@ data Token =
     TokenCollect |
     TokenSequential |
     TokenPredPick |
+    TokenTrue |
+    TokenFalse |
     TokenLabel String
   deriving (Eq,Show)
 

@@ -17,6 +17,8 @@ import Tokens
     collect     { TokenCollect }
     sequential  { TokenSequential }
     predPick    { TokenPredPick }
+    true        { TokenTrue }
+    false       { TokenFalse }
     and         { TokenAnd }
     or          { TokenOr }
     xor         { TokenXOr }
@@ -94,6 +96,8 @@ Predicate : not lParen Predicate lParen				{ NotOperation $3 }
 		  | Predicate xor Predicate 				{ BinaryBoolOperation $1 XOrOperator $3}
 		  | ColIdent ComparisonOperator ColIdent 	{ ComparisonOperation $1 $2 $3 }
 		  | lParen Predicate rParen 				{ BracketedPredicate $2 }
+      | true                            { PredValueTrue }
+      | false                           { PredValueFalse }
 
 ComparisonOperator : equals 						{ EqualsOperator }
 				   | lt 							{ LTOperator }
@@ -111,6 +115,7 @@ data Statement =
 	|   CSVStatement {
 			sFile :: CSVFile
 		}
+    deriving (Show,Eq)
 
 data QuerySpec =
 		QuerySpec {
@@ -120,6 +125,7 @@ data QuerySpec =
 	|   BasicQuerySpec {
 			bqsElements :: SelectList
 		}
+    deriving (Show,Eq)
 
 type SelectList = [SelectElement]
 
@@ -130,6 +136,7 @@ data SelectElement =
 		}
 	|   IdentifiedElement ColIdent -- TODO
 	|   IRQ InterRowQuery -- TODO
+  deriving (Show,Eq)
 
 data ColIdent =
 		LabelIndex {
@@ -145,6 +152,7 @@ data ColIdent =
 	|   GeneratedColumn {
 			ciGenerator :: ColGen
 		}
+  deriving (Show,Eq)
 
 data TableExpr =
 		NoWhereExpr {
@@ -157,6 +165,7 @@ data TableExpr =
 	|   JustWhereExpr {
 			jwWhereClause :: WhereClause
 		}
+  deriving (Show,Eq)
 
 data TableReference =
 		JoinTableRef {
@@ -168,6 +177,7 @@ data TableReference =
 	|   CSV {
 			csvFile :: CSVFile
 		}
+  deriving (Show,Eq)
 
 data SubQuery =
 		ElementTransform {
@@ -176,24 +186,29 @@ data SubQuery =
 	|   SubQuery {
 			subquerySpec :: QuerySpec
 		}
+  deriving (Show,Eq)
 
 data JoinedTable =
 		CrossJoinedTable CrossJoinTable
 	|   ConcatJoinedTable ConcatJoinTable
+  deriving (Show,Eq)
 
 data CrossJoinTable =
 		CrossJoinTable TableReference TableReference
 	|   CrossJoinTableLL TableReference ColLabel TableReference
 	|   CrossJoinTableRL TableReference TableReference ColLabel
 	|   CrossJoinTableLRL TableReference ColLabel TableReference ColLabel
+  deriving (Show,Eq)
 
 data ConcatJoinTable =
 		ConcatJoinTable TableReference TableReference
 	|   ConcatJoinTableLL TableReference ColLabel TableReference
 	|   ConcatJoinTableRL TableReference TableReference ColLabel
 	|   ConcatJoinTableLRL TableReference ColLabel TableReference ColLabel
+  deriving (Show,Eq)
 
-data WhereClause = WhereClause Predicate
+data WhereClause = WhereClause Predicate deriving (Show,Eq)
+
 
 data Predicate =
 		BinaryBoolOperation {
@@ -210,20 +225,24 @@ data Predicate =
 			coOperandB :: ColIdent
 		}
 	| 	BracketedPredicate {
-			predicate :: Predicate	
+			predicate :: Predicate
 		}
+  |   PredValueTrue
+  |   PredValueFalse
+  deriving (Show,Eq)
 
-data BooleanOperator = AndOperator | OrOperator | XOrOperator
+data BooleanOperator = AndOperator | OrOperator | XOrOperator deriving (Show,Eq)
 
-data ComparisonOperator = EqualsOperator | LTOperator | GTOperator
+data ComparisonOperator = EqualsOperator | LTOperator | GTOperator deriving (Show,Eq)
 
-data InterRowQuery = InterRowQuery { irqTable :: TableReference } -- collect statement
+data InterRowQuery = InterRowQuery { irqTable :: TableReference } deriving (Show,Eq) -- collect statement
 
 data ColGen = ColGen {
 			cgPredicate :: Predicate,
 			cgColA :: ColIdent,
 			cgColB :: ColIdent
 		}
+    deriving (Show,Eq)
 
 type ColLabel = String
 
@@ -232,4 +251,5 @@ data CSVFile =
 		File {
 			filename :: String
 		}
+    deriving (Show,Eq)
 }
