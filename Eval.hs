@@ -4,11 +4,12 @@ import Data.List
 
 type Table = [(String, Int, [String])]
 
-eval1 :: Statement -> IO Table
-eval1 (CSVStatement x) = processFile x
+eval :: Statement -> IO Table
+eval (CSVStatement x) = processFile x
+--eval (QueryStatement (BasicQuerySpec ))
 
-printTable :: Table -> IO ()
-printTable tb = mapM_ putStrLn (map (intercalate "," ) (transpose (map getRow tb)))
+unparse :: Table -> String
+unparse tb = unlines (map (intercalate "," ) (transpose (map getRow tb)))
   where getRow (_, _, xs) = xs
 
 
@@ -26,4 +27,4 @@ splitOn :: Char -> String -> [String]
 splitOn c [] = [""]
 splitOn c (x:[]) | x == c = [[]]
 splitOn c (x:xs) | x == c = "":(splitOn c xs)
-splitOn c (x:xs) | otherwise = (x : head (splitOn c xs)):(tail $ splitOn c xs)
+                 | otherwise = (x : head (splitOn c xs)):(tail $ splitOn c xs)
