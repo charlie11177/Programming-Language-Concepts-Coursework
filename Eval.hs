@@ -273,7 +273,8 @@ processFile (File path) = do
   return ([(Just name, Just (fst x), snd x) | x <- zip [0..] cols])
 
 splitCols :: String -> [[String]]
-splitCols xs = transpose (map (splitOn ',') (splitOn '\n' xs))
+splitCols xs = map (map (dropWhileEnd (==' ')))(map (map (dropWhile (==' '))) cols)
+  where cols = transpose (map (splitOn ',') (splitOn '\n' xs))
 
 splitOn :: Char -> String -> [String]
 splitOn c [] = [""]
