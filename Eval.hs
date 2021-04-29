@@ -163,81 +163,81 @@ evalSubQuery (ElementTransform sl) row = [(Nothing, Nothing, selectFromRow sl ro
 
 evalCrossJoinTable :: CrossJoinTable -> [(Maybe String, Maybe Int, String)] ->  IO Table
 evalCrossJoinTable (CrossJoinTable tr1 tr2) row = do
-  table1 <- evalTableReference tr1 row
-  table2 <- evalTableReference tr2 row
+  table1 <- evalTableReference tr1 (Just row)
+  table2 <- evalTableReference tr2 (Just row)
   let aLength = (\(_,_,cols) -> length cols) (head table1)
   let bLength = (\(_,_,cols) -> length cols) (head table2)
-  return ((\(label, index, cols) -> (label, index, concat[replicate bLength element |element <- cols])) table1) ++ (\(label, index, cols) -> (label,index,concat(replicate aLength cols))) table2
+  return (((\(label, index, cols) -> (label, index, concat[replicate bLength element |element <- cols])) table1) ++ (\(label, index, cols) -> (label,index,concat(replicate aLength cols))) table2)
 evalCrossJoinTable (CrossJoinTableLL tr1 lbl1 tr2) row = do
-  table1 <- evalTableReference tr1 row
+  table1 <- evalTableReference tr1 (Just row)
   table1 <- reLabel table1 lbl1
-  table2 <- evalTableReference tr2 row
+  table2 <- evalTableReference tr2 (Just row)
   let aLength = (\(_,_,cols) -> length cols) (head table1)
   let bLength = (\(_,_,cols) -> length cols) (head table2)
-  return ((\(label, index, cols) -> (label, index, concat[replicate bLength element |element <- cols])) table1) ++ (\(label, index, cols) -> (label,index,concat(replicate aLength cols))) table2
+  return (((\(label, index, cols) -> (label, index, concat[replicate bLength element |element <- cols])) table1) ++ (\(label, index, cols) -> (label,index,concat(replicate aLength cols))) table2)
 evalCrossJoinTable (CrossJoinTableRL tr1 tr2 lbl2) row = do
-  table1 <- evalTableReference tr1 row
-  table2 <- evalTableReference tr2 row
+  table1 <- evalTableReference tr1 (Just row)
+  table2 <- evalTableReference tr2 (Just row)
   table2 <- reLabel table2 lbl2
   let aLength = (\(_,_,cols) -> length cols) (head table1)
   let bLength = (\(_,_,cols) -> length cols) (head table2)
-  return ((\(label, index, cols) -> (label, index, concat[replicate bLength element |element <- cols])) table1) ++ (\(label, index, cols) -> (label,index,concat(replicate aLength cols))) table2
+  return (((\(label, index, cols) -> (label, index, concat[replicate bLength element |element <- cols])) table1) ++ (\(label, index, cols) -> (label,index,concat(replicate aLength cols))) table2)
 evalCrossJoinTable (CrossJoinTableLRL tr1 lbl1 tr2 lbl2) row = do
-  table1 <- evalTableReference tr1 row
+  table1 <- evalTableReference tr1 (Just row)
   table1 <- reLabel table1 lbl1
-  table2 <- evalTableReference tr2 row
+  table2 <- evalTableReference tr2 (Just row)
   table2 <- reLabel table2 lbl2
   let aLength = (\(_,_,cols) -> length cols) (head table1)
   let bLength = (\(_,_,cols) -> length cols) (head table2)
-  return ((\(label, index, cols) -> (label, index, concat[replicate bLength element |element <- cols])) table1) ++ (\(label, index, cols) -> (label,index,concat(replicate aLength cols))) table2
+  return (((\(label, index, cols) -> (label, index, concat[replicate bLength element |element <- cols])) table1) ++ (\(label, index, cols) -> (label,index,concat(replicate aLength cols))) table2)
 
 reLabel :: Table -> String -> IO Table
 reLabel tbl lbl = do
   let zippedCols = zip [0..] tbl
-  return map (\(i, (Just label, _, cols)) -> (Just lbl, Just i, cols)) zippedCols
+  return (map (\(i, (Just label, _, cols)) -> (Just lbl, Just i, cols)) zippedCols)
 
 
 evalConcatJoinTable :: ConcatJoinTable -> [(Maybe String, Maybe Int, String)] -> IO Table
 evalConcatJoinTable (ConcatJoinTable tr1 tr2) row = do
-  table1 <- evalTableReference tr1 row
-  table2 <- evalTableReference tr2 row
+  table1 <- evalTableReference tr1 (Just row)
+  table2 <- evalTableReference tr2 (Just row)
   let aLength = (\(_,_,cols) -> length cols) (head table1)
   let bLength = (\(_,_,cols) -> length cols) (head table2)
   let shortestLength = min aLength bLength
   let cuttable1 = map (\(lb, ind, cols) -> (lb, ind, take shortestLength cols)) table1
   let cuttable2 = map (\(lb, ind, cols) -> (lb, ind, take shortestLength cols)) table2
-  return cuttable1 ++ cuttable2
+  return (cuttable1 ++ cuttable2)
 evalConcatJoinTable (ConcatJoinTableLL tr1 lbl1 tr2) row = do
-  table1 <- evalTableReference tr1 row
+  table1 <- evalTableReference tr1 (Just row)
   table1 <- reLabel table1 lbl1
-  table2 <- evalTableReference tr2 row
+  table2 <- evalTableReference tr2 (Just row)
   let aLength = (\(_,_,cols) -> length cols) (head table1)
   let bLength = (\(_,_,cols) -> length cols) (head table2)
   let shortestLength = min aLength bLength
   let cuttable1 = map (\(lb, ind, cols) -> (lb, ind, take shortestLength cols)) table1
   let cuttable2 = map (\(lb, ind, cols) -> (lb, ind, take shortestLength cols)) table2
-  return cuttable1 ++ cuttable2
+  return (cuttable1 ++ cuttable2)
 evalConcatJoinTable (ConcatJoinTableRL tr1 tr2 lbl2) row = do
-  table1 <- evalTableReference tr1 row
-  table2 <- evalTableReference tr2 row
+  table1 <- evalTableReference tr1 (Just row)
+  table2 <- evalTableReference tr2 (Just row)
   table2 <- reLabel table2 lbl2
   let aLength = (\(_,_,cols) -> length cols) (head table1)
   let bLength = (\(_,_,cols) -> length cols) (head table2)
   let shortestLength = min aLength bLength
   let cuttable1 = map (\(lb, ind, cols) -> (lb, ind, take shortestLength cols)) table1
   let cuttable2 = map (\(lb, ind, cols) -> (lb, ind, take shortestLength cols)) table2
-  return cuttable1 ++ cuttable2
+  return (cuttable1 ++ cuttable2)
 evalConcatJoinTable (ConcatJoinTableLRL tr1 lbl1 tr2 lbl2) row = do
-  table1 <- evalTableReference tr1 row
+  table1 <- evalTableReference tr1 (Just row)
   table1 <- reLabel table1 lbl1
-  table2 <- evalTableReference tr2 row
+  table2 <- evalTableReference tr2 (Just row)
   table2 <- reLabel table2 lbl2
   let aLength = (\(_,_,cols) -> length cols) (head table1)
   let bLength = (\(_,_,cols) -> length cols) (head table2)
   let shortestLength = min aLength bLength
   let cuttable1 = map (\(lb, ind, cols) -> (lb, ind, take shortestLength cols)) table1
   let cuttable2 = map (\(lb, ind, cols) -> (lb, ind, take shortestLength cols)) table2
-  return cuttable1 ++ cuttable2
+  return (cuttable1 ++ cuttable2)
 
 
 evalWhereClause :: WhereClause -> Table -> Table --TODO: Nothing cases
