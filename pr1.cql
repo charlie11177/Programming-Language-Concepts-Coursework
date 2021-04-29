@@ -1,0 +1,1 @@
+SELECT * FROM CONCAT JOIN (A.csv) (B.csv)

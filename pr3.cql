@@ -1,0 +1,1 @@
+SELECT 0 ( COLLECT ( SELECT PREDPICK ( NOT (aelem[0] EQUALS "") ) aelem[0] belem[0] FROM CONCAT JOIN (SEQUENTIAL P[1] P[2] P[3]) AS aelem (SEQUENTIAL Q[1] Q[2] Q[3]) AS belem) ) FROM CROSS JOIN (P.csv) (Q.csv) WHERE P[0] EQUALS Q[0]
