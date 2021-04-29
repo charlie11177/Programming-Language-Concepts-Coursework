@@ -9,7 +9,7 @@ eval (CSVStatement x) = processFile x
 eval (QueryStatement qs) = evalQuerySpec qs Nothing
 
 selectColByCI :: ColIdent -> Maybe Table -> Maybe (Maybe String, Maybe Int, [String])
-selectColByCI (Constant ciValue) _ = Just (Nothing, Nothing, [ciValue..])
+selectColByCI (Constant ciValue) _ = Just (Nothing, Nothing, (repeatForever ciValue))
 selectColByCI (GeneratedColumn (ColGen predicate colA colB)) scope | colAResult == Nothing || colBResult == Nothing = Nothing
                                                                    | otherwise                                      = Just (Nothing, Nothing, [switchOnResult predResult colAElem colBElem | ((predResult,colAElem),colBElem)<-zip (zip predicateResults (extractContent colAResult)) (extractContent colBResult)])
   where
@@ -17,7 +17,7 @@ selectColByCI (GeneratedColumn (ColGen predicate colA colB)) scope | colAResult 
     switchOnResult True aElem _ = aElem
     switchOnResult False _ bElem = bElem
     colAResult = selectColByCI colA scope
-    colBResult = selectColByCI colA scope
+    colBResult = selectColByCI colB scope
     predicateResults = applyPredicate predicate scope
     extractContent :: Maybe (Maybe String, Maybe Int, [String]) -> [String]
     extractContent Nothing = error "unreachable"
@@ -172,7 +172,7 @@ evalSubQuery (ElementTransform sl) row = return [(Nothing, Nothing, selectFromRo
                     opToFunction GTOperator = (>)
                     applyOperator :: (String -> String -> Bool) -> Maybe String -> Maybe String -> Bool
                     applyOperator _ Nothing _ = False
-                    applyOperator _ _ Nothing = False 
+                    applyOperator _ _ Nothing = False
                     applyOperator op (Just a) (Just b) = op a b
             selectColByCI _ Nothing = Nothing
             selectColByCI (LabelIndex ciLabel ciIndex) (Just row) = Just (head [content |(label, index, content) <- row, label == (Just ciLabel), index == (Just ciIndex)])
@@ -259,7 +259,7 @@ evalConcatJoinTable (ConcatJoinTableLRL tr1 lbl1 tr2 lbl2) row = do
 
 
 evalWhereClause :: WhereClause -> Table -> Table --TODO: Nothing cases
-evalWhereClause (WhereClause p) scope = [(label, index, [cell | (predResult, cell) <- zip col (applyPredicate p scope), predResult]) | (label, index, col) <- scope]
+evalWhereClause (WhereClause p) scope = [(label, index, [predResult | (predResult, cell) <- zip col (applyPredicate p (Just scope)), cell]) | (label, index, col) <- scope]
 unparse :: Table -> String
 
 unparse tb = unlines (map (intercalate "," ) (transpose (map getRow tb)))
@@ -270,7 +270,7 @@ processFile (File path) = do
   sourceText <- readFile path
   let name = take (length path - 4) path
   let cols = splitCols sourceText
-  return ([(Just name, fst x, snd x) | x <- zip [0..] cols])
+  return ([(Just name, Just (fst x), snd x) | x <- zip [0..] cols])
 
 splitCols :: String -> [[String]]
 splitCols xs = transpose (map (splitOn ',') (splitOn '\n' xs))

@@ -1,6 +1,6 @@
 import Tokens
 import Grammar
---import Eval
+import Eval
 import System.Environment
 import Data.List
 import Control.Exception
@@ -16,8 +16,8 @@ main' = do (fileName : _ ) <- getArgs
            putStrLn ("Lexed as: " ++ show lexedProg)
            let parsedProg = parse lexedProg
            putStrLn ("Parsed as " ++ (show parsedProg))
-           --result <- eval parsedProg
-           --putStrLn ("Evaluates to: \n" ++ (unparse result))
+           result <- eval parsedProg
+           putStrLn ("Evaluates to: \n" ++ (unparse result))
 
 noParse :: ErrorCall -> IO ()
 noParse e = do let err =  show e
