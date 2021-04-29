@@ -85,7 +85,7 @@ applyPredicate (ComparisonOperation colA operator colB) (Just scope) = case (col
                                                                         (Just aContents, Just bContents) -> [(opToFunction operator) aElem bElem| (aElem, bElem) <- zip aContents bContents]
   where
     colAContents = (\(_,_,contents)->contents) <$> (selectColByCI colA (Just scope))
-    colBContents = (\(_,_,contents)->contents) <$> (selectColByCI colA (Just scope))
+    colBContents = (\(_,_,contents)->contents) <$> (selectColByCI colB (Just scope))
     opToFunction :: ComparisonOperator -> (String -> String -> Bool)
     opToFunction EqualsOperator = (==)
     opToFunction LTOperator = (<)
@@ -124,7 +124,11 @@ evalJoinedTable (CrossJoinedTable table) row = evalCrossJoinTable table row
 
 evalSubQuery :: SubQuery -> Maybe [(Maybe String, Maybe Int, String)] -> IO Table
 evalSubQuery (SubQuery qs) row = evalQuerySpec qs row
-evalSubQuery (ElementTransform sl) row = return [(Nothing, Nothing, selectFromRow sl row)]
+evalSubQuery (ElementTransform sl) row = do
+										  putStrLn ""
+										  putStrLn (show (selectFromRow sl row))
+										  putStrLn ""
+										  return [(Nothing, Nothing, selectFromRow sl row)]
   where
     selectFromRow :: SelectList -> Maybe [(Maybe String, Maybe Int, String)] -> [String] --TODO: IO monad stuff
     selectFromRow sl row = concat $ map (\element -> selectColsBySE element row) sl --TODO: shorten infinite length columns to be the length of the rest of the table
@@ -212,7 +216,7 @@ evalCrossJoinTable (CrossJoinTableLRL tr1 lbl1 tr2 lbl2) row = do
 reLabel :: Table -> String -> IO Table
 reLabel tbl lbl = do
   let zippedCols = zip [0..] tbl
-  return (map (\(i, (Just label, _, cols)) -> (Just lbl, Just i, cols)) zippedCols)
+  return (map (\(i, (_, _, cols)) -> (Just lbl, Just i, cols)) zippedCols)
 
 
 evalConcatJoinTable :: ConcatJoinTable -> Maybe[(Maybe String, Maybe Int, String)] -> IO Table

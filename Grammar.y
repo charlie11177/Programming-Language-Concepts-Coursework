@@ -90,7 +90,7 @@ SubQuery : sequential SelectList 					{ ElementTransform $2 }
 
 WhereClause : where Predicate 						{ WhereClause $2 }
 
-Predicate : not lParen Predicate lParen				{ NotOperation $3 }
+Predicate : not lParen Predicate rParen				{ NotOperation $3 }
 		  | Predicate and Predicate     			{ BinaryBoolOperation $1 AndOperator $3 }
 		  | Predicate or Predicate 					{ BinaryBoolOperation $1 OrOperator $3 }
 		  | Predicate xor Predicate 				{ BinaryBoolOperation $1 XOrOperator $3}
