@@ -1,1 +1,1 @@
-SELECT * FROM CONCAT JOIN (A.csv) (B.csv)
+SELECT * FROM CROSS JOIN (A.csv) (B.csv)
