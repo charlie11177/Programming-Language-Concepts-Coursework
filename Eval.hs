@@ -1,8 +1,12 @@
 module Eval where
 import Grammar
 import Data.List
+import Debug.Trace
 
 type Table = [(Maybe String, Maybe Int, [String])]
+
+debugTrace :: Show a => String -> a ->a
+debugTrace str a = trace (str ++ (show a) ++ " ") a
 
 eval :: Statement -> IO Table
 eval (CSVStatement x) = processFile x
@@ -13,17 +17,17 @@ selectColByCI (Constant ciValue) _ = Just (maxBound, (Nothing, Nothing, (repeatF
 selectColByCI (GeneratedColumn (ColGen predicate colA colB)) scope = case (colAOutput, colBOutput) of 
                         (Nothing,_) -> Nothing 
                         (_,Nothing) -> Nothing
-                        (Just(colALength, colAResult), Just(colBLength, colBResult)) -> Just (min colALength colBLength, (Nothing, Nothing, [switchOnResult predResult colAElem colBElem | ((predResult,colAElem),colBElem)<-zip (zip predicateResults (extractContent colAResult)) (extractContent colBResult)]))
+                        (Just(colALength, colAResult), Just(colBLength, colBResult)) -> (Just (min colALength colBLength, (Nothing, Nothing, [switchOnResult predResult colAElem colBElem | ((predResult,colAElem),colBElem)<-zip (zip predicateResults (extractContent colAResult)) (extractContent colBResult)])))
   where
     switchOnResult :: Bool -> String -> String -> String
     switchOnResult True aElem _ = aElem
     switchOnResult False _ bElem = bElem
-    colBOutput = selectColByCI colA scope
-    colAOutput = selectColByCI colB scope
+    colAOutput = selectColByCI colA scope
+    colBOutput = selectColByCI colB scope
     predicateResults = applyPredicate predicate scope
     extractContent (label, index, content) = content
 selectColByCI _ Nothing = Nothing
-selectColByCI (LabelIndex ciLabel ciIndex) (Just scope) = Just (length content, outputVal)
+selectColByCI (LabelIndex ciLabel ciIndex) (Just scope) = (Just (length content, outputVal))
   where
     filterOp :: Maybe String -> Maybe Int -> Bool
     filterOp Nothing _ = False
@@ -135,9 +139,6 @@ evalJoinedTable (CrossJoinedTable table) row = evalCrossJoinTable table row
 evalSubQuery :: SubQuery -> Maybe [(Maybe String, Maybe Int, String)] -> IO Table
 evalSubQuery (SubQuery qs) row = evalQuerySpec qs row
 evalSubQuery (ElementTransform sl) row = do
-                      putStrLn ""
-                      putStrLn (show (selectFromRow sl row))
-                      putStrLn ""
                       return [(Nothing, Nothing, selectFromRow sl row)]
   where
     selectFromRow :: SelectList -> Maybe [(Maybe String, Maybe Int, String)] -> [String] --TODO: IO monad stuff
@@ -160,13 +161,14 @@ evalSubQuery (ElementTransform sl) row = do
           where
             selectColByCI :: ColIdent -> Maybe [(Maybe String, Maybe Int, String)] -> Maybe String
             selectColByCI (Constant ciValue) _ = Just ciValue
-            selectColByCI (GeneratedColumn (ColGen predicate colA colB)) row = switchOnResult (applyPredicateRow predicate row) colAContents colBContents
+            selectColByCI (GeneratedColumn (ColGen predicate colA colB)) row = (switchOnResult (applyPredicateRow predicate row) colAContents colBContents)
               where
                 switchOnResult :: Bool -> Maybe String -> Maybe String -> Maybe String
                 switchOnResult True aElem _ = aElem
                 switchOnResult False _ bElem = bElem
                 colAContents = selectColByCI colA row
-                colBContents = selectColByCI colA row
+                colBContents = selectColByCI colB row
+                boolResult = applyPredicateRow predicate row
 
                 applyPredicateRow :: Predicate -> Maybe [(Maybe String, Maybe Int, String)] -> Bool
                 applyPredicateRow PredValueTrue _ = True
@@ -189,7 +191,7 @@ evalSubQuery (ElementTransform sl) row = do
                     applyOperator _ _ Nothing = False
                     applyOperator op (Just a) (Just b) = op a b
             selectColByCI _ Nothing = Nothing
-            selectColByCI (LabelIndex ciLabel ciIndex) (Just row) = Just (head [content |(label, index, content) <- row, label == (Just ciLabel), index == (Just ciIndex)])
+            selectColByCI (LabelIndex ciLabel ciIndex) (Just row) = (Just (head [content |(label, index, content) <- row, label == (Just ciLabel), index == (Just ciIndex)]))
             selectColByCI (Index index) (Just row) = Just (extractContent (row!!index))
         selectColsBySE (IRQ irq) scope = error "You cannot perform an InterRowQuery whilst already within another row's scope"
 
@@ -197,8 +199,12 @@ evalCrossJoinTable :: CrossJoinTable -> Maybe [(Maybe String, Maybe Int, String)
 evalCrossJoinTable (CrossJoinTable tr1 tr2) row = do
   table1 <- evalTableReference tr1 row
   table2 <- evalTableReference tr2 row
-  let aLength = (\(_,_,cols) -> length cols) (head table1)
-  let bLength = (\(_,_,cols) -> length cols) (head table2)
+  let aLength = case table1 of 
+                   []     -> 0
+                   (a:as) -> (\(_,_,cols) -> length cols) a
+  let bLength = case table2 of 
+                   []     -> 0
+                   (b:bs) -> (\(_,_,cols) -> length cols) b
   return ((map (\(label, index, cols) -> (label, index, concat[replicate bLength element |element <- cols])) table1) ++ (map (\(label, index, cols) -> (label,index,concat(replicate aLength cols))) table2))
 evalCrossJoinTable (CrossJoinTableLL tr1 lbl1 tr2) row = do
   table1 <- evalTableReference tr1 row
