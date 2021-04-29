@@ -8,50 +8,60 @@ eval :: Statement -> IO Table
 eval (CSVStatement x) = processFile x
 eval (QueryStatement qs) = evalQuerySpec qs Nothing
 
-selectColByCI :: ColIdent -> Maybe Table -> Maybe (Maybe String, Maybe Int, [String])
-selectColByCI (Constant ciValue) _ = Just (Nothing, Nothing, (repeatForever ciValue))
-selectColByCI (GeneratedColumn (ColGen predicate colA colB)) scope | colAResult == Nothing || colBResult == Nothing = Nothing
-                                                                   | otherwise                                      = Just (Nothing, Nothing, [switchOnResult predResult colAElem colBElem | ((predResult,colAElem),colBElem)<-zip (zip predicateResults (extractContent colAResult)) (extractContent colBResult)])
+selectColByCI :: ColIdent -> Maybe Table -> Maybe (Int, (Maybe String, Maybe Int, [String]))
+selectColByCI (Constant ciValue) _ = Just (maxBound, (Nothing, Nothing, (repeatForever ciValue)))
+selectColByCI (GeneratedColumn (ColGen predicate colA colB)) scope = case (colAOutput, colBOutput) of 
+                        (Nothing,_) -> Nothing 
+                        (_,Nothing) -> Nothing
+                        (Just(colALength, colAResult), Just(colBLength, colBResult)) -> Just (min colALength colBLength, (Nothing, Nothing, [switchOnResult predResult colAElem colBElem | ((predResult,colAElem),colBElem)<-zip (zip predicateResults (extractContent colAResult)) (extractContent colBResult)]))
   where
     switchOnResult :: Bool -> String -> String -> String
     switchOnResult True aElem _ = aElem
     switchOnResult False _ bElem = bElem
-    colAResult = selectColByCI colA scope
-    colBResult = selectColByCI colB scope
+    colBOutput = selectColByCI colA scope
+    colAOutput = selectColByCI colB scope
     predicateResults = applyPredicate predicate scope
-    extractContent :: Maybe (Maybe String, Maybe Int, [String]) -> [String]
-    extractContent Nothing = error "unreachable"
-    extractContent (Just (label, index, content)) = content
+    extractContent (label, index, content) = content
 selectColByCI _ Nothing = Nothing
-selectColByCI (LabelIndex ciLabel ciIndex) (Just scope) = Just (head (filter (\(a, b, c) -> (filterOp a b)) scope))
+selectColByCI (LabelIndex ciLabel ciIndex) (Just scope) = Just (length content, outputVal)
   where
     filterOp :: Maybe String -> Maybe Int -> Bool
     filterOp Nothing _ = False
     filterOp _ Nothing = False
     filterOp (Just colLabel) (Just colIndex) = colLabel == ciLabel && ciIndex == colIndex
-selectColByCI (Index index) (Just scope) = Just (scope!!index)
+    outputVal@(_,_,content) = head (filter (\(a, b, c) -> (filterOp a b)) scope)
+selectColByCI (Index index) (Just scope) = Just ((\(_,_,content) -> length content) (scope!!index),scope!!index)
 
 
 selectCols :: SelectList -> Maybe Table -> IO Table --TODO: IO monad stuff
 selectCols sl scope = do
-                      subTables <- mapM (\element -> selectColsBySE element scope) sl --TODO: shorten infinite length columns to be the length of the rest of the table
-                      return (concat subTables)
+                      result <- mapM (\element -> selectColsBySE element scope) sl --TODO: shorten infinite length columns to be the length of the rest of the table
+                      let minLength = minimum (map fst result)
+                      let subTables = map snd result
+                      return ((trimToLength $ concat subTables) minLength)
   where
-    selectColsBySE :: SelectElement -> Maybe Table -> IO Table
-    selectColsBySE Asterisk Nothing = return []
-    selectColsBySE Asterisk (Just scope) = return scope
-    selectColsBySE (LabelledAsterisk seLabel) (Just scope) = return (filter (\(colLabel, index, col) -> filterOp colLabel) scope)
+    getMinLength :: Table -> Int
+    getMinLength table = minimum (map (\(_,_,content) -> length content) table)
+    selectColsBySE :: SelectElement -> Maybe Table -> IO (Int,Table)
+    selectColsBySE Asterisk Nothing = return (0,[])
+    selectColsBySE Asterisk (Just scope) = return (getMinLength scope, scope)
+    selectColsBySE (LabelledAsterisk seLabel) (Just scope) = return (getMinLength returnVal, returnVal)
       where
         filterOp :: Maybe String -> Bool
         filterOp Nothing = False
         filterOp (Just str) = str == seLabel
+        returnVal = filter (\(colLabel, index, col) -> filterOp colLabel) scope
     selectColsBySE (IdentifiedElement colIdent) scope = case elementResult of
-                                                          Nothing  -> return []
-                                                          (Just a) -> return [a]
+                                                          Nothing  -> return (0,[])
+                                                          (Just (colLength,a)) -> return (colLength,[a])
       where
         elementResult = selectColByCI colIdent scope
     selectColsBySE (IRQ _) Nothing = error "Inter-Row queries require a FROM block to be provided"
-    selectColsBySE (IRQ irq) (Just scope) = evalInterRowQuery irq scope
+    selectColsBySE (IRQ irq) (Just scope) = do
+                      result <- evalInterRowQuery irq scope
+                      return (getMinLength result, result)
+    trimToLength :: Table -> Int -> Table 
+    trimToLength table maxLength = map (\(label, index, content) -> (label, index, take maxLength content)) table
 
 evalInterRowQuery :: InterRowQuery -> Table -> IO Table
 evalInterRowQuery (InterRowQuery tableRef) scope = do
@@ -84,8 +94,8 @@ applyPredicate (ComparisonOperation colA operator colB) (Just scope) = case (col
                                                                         (Nothing,Nothing)                -> error "unreachable"
                                                                         (Just aContents, Just bContents) -> [(opToFunction operator) aElem bElem| (aElem, bElem) <- zip aContents bContents]
   where
-    colAContents = (\(_,_,contents)->contents) <$> (selectColByCI colA (Just scope))
-    colBContents = (\(_,_,contents)->contents) <$> (selectColByCI colB (Just scope))
+    colAContents = (\(_,(_,_,contents))->contents) <$> (selectColByCI colA (Just scope))
+    colBContents = (\(_,(_,_,contents))->contents) <$> (selectColByCI colB (Just scope))
     opToFunction :: ComparisonOperator -> (String -> String -> Bool)
     opToFunction EqualsOperator = (==)
     opToFunction LTOperator = (<)
@@ -125,10 +135,10 @@ evalJoinedTable (CrossJoinedTable table) row = evalCrossJoinTable table row
 evalSubQuery :: SubQuery -> Maybe [(Maybe String, Maybe Int, String)] -> IO Table
 evalSubQuery (SubQuery qs) row = evalQuerySpec qs row
 evalSubQuery (ElementTransform sl) row = do
-										  putStrLn ""
-										  putStrLn (show (selectFromRow sl row))
-										  putStrLn ""
-										  return [(Nothing, Nothing, selectFromRow sl row)]
+                      putStrLn ""
+                      putStrLn (show (selectFromRow sl row))
+                      putStrLn ""
+                      return [(Nothing, Nothing, selectFromRow sl row)]
   where
     selectFromRow :: SelectList -> Maybe [(Maybe String, Maybe Int, String)] -> [String] --TODO: IO monad stuff
     selectFromRow sl row = concat $ map (\element -> selectColsBySE element row) sl --TODO: shorten infinite length columns to be the length of the rest of the table

@@ -6,4 +6,4 @@
 
 --SELECT 0 1 FROM A.csv WHERE NOT(1 EQUALS "") --Q4
 
---SELECT 0 "0" 0 FROM A.csv --Q5
+SELECT 0 "0" 0 FROM A.csv --Q5
