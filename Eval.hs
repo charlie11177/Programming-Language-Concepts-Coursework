@@ -274,7 +274,13 @@ processFile (File path) = do
 
 splitCols :: String -> [[String]]
 splitCols xs = map (map (dropWhileEnd (==' ')))(map (map (dropWhile (==' '))) cols)
-  where cols = transpose (map (splitOn ',') (splitOn '\n' xs))
+  where
+    arity = length (filter (==',') (head (splitOn '\n' xs))) + 1
+    rows = (map (splitOn ',') (splitOn '\n' xs))
+    cols = transpose rowsSameArity
+    rowsSameArity = map (\x -> if ((length x) < arity) then ( x ++ (replicate (arity - (length x)) "")) else x) rows
+
+
 
 splitOn :: Char -> String -> [String]
 splitOn c [] = [""]
