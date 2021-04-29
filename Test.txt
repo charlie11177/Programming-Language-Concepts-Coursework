@@ -1,1 +1,3 @@
-SELECT * FROM a.csv
+--SELECT 0 ( COLLECT ( SELECT PREDPICK ( NOT ( aelem[0] EQUALS "" ) ) aelem[0] FROM CONCAT JOIN (SEQUENTIAL a*) AS aelem (SEQUENTIAL b*) AS belem ) ) FROM CROSS JOIN (a.csv) (b.csv)
+
+--SELECT * FROM CONCAT JOIN (a.csv) (b.csv) Q1

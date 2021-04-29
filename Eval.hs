@@ -259,7 +259,7 @@ evalConcatJoinTable (ConcatJoinTableLRL tr1 lbl1 tr2 lbl2) row = do
 
 
 evalWhereClause :: WhereClause -> Table -> Table --TODO: Nothing cases
-evalWhereClause (WhereClause p) scope = [(label, index, [predResult | (predResult, cell) <- zip col (applyPredicate p (Just scope)), cell]) | (label, index, col) <- scope]
+evalWhereClause (WhereClause p) scope = [(label, index, [cell | (cell, predResult) <- zip col (applyPredicate p (Just scope)), predResult]) | (label, index, col) <- scope]
 unparse :: Table -> String
 
 unparse tb = unlines (map (intercalate "," ) (transpose (map getRow tb)))
