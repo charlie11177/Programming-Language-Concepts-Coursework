@@ -93,8 +93,11 @@ applyPredicate (ComparisonOperation colA operator colB) (Just scope) = case (col
 
 
 evalQuerySpec :: QuerySpec -> Maybe [(Maybe String, Maybe Int, String)] -> IO Table
-evalQuerySpec (QuerySpec sl te) row = selectCols sl (evalTableExpr te row)
-evalQuerySpec (BasicQuerySpec sl) _ = selectCols sl []
+evalQuerySpec (QuerySpec sl te) row = do
+                                      producedTable <- evalTableExpr te row
+                                      result <- selectCols sl producedTable
+                                      return result
+evalQuerySpec (BasicQuerySpec sl) _ = selectCols sl (Just [])
 
 
 
@@ -106,14 +109,18 @@ evalTableExpr (WithWhereExpr tr wc) row = do
                                       table <- evalTableReference tr row
                                       let filteredTable = evalWhereClause wc table
                                       return (Just filteredTable)
-evalTableExpr (JustWhereExpr wc) _ | evalWhereClause wc = return (Just [])
-                                   | otherwise = return Nothing
+evalTableExpr (JustWhereExpr wc) _ = return (Just (evalWhereClause wc [])) --TODO: deal with Nothing cases
+                                   
 
 evalTableReference :: TableReference -> Maybe [(Maybe String, Maybe Int, String)] -> IO Table
-evalTableReference (JoinTableRef concatJoin@(ConcatJoinTable _ _)) row = evalConcatJoinTable concatJoin row
-evalTableReference (JoinTableRef crossJoin@(CrossJoinTable _ _)) row = evalCrossJoinTable crossJoin row
+evalTableReference (JoinTableRef table) row = evalJoinedTable table row 
 evalTableReference (SubQueryRef sqr) row = evalSubQuery sqr row
 evalTableReference (CSV csv) row = processFile csv
+
+
+evalJoinedTable :: JoinedTable -> Maybe[(Maybe String, Maybe Int, String)] -> IO Table
+evalJoinedTable (ConcatJoinedTable table) row = evalConcatJoinTable table row
+evalJoinedTable (CrossJoinedTable table) row = evalCrossJoinTable table row
 
 evalSubQuery :: SubQuery -> Maybe [(Maybe String, Maybe Int, String)] -> IO Table
 evalSubQuery (SubQuery qs) row = evalQuerySpec qs row
@@ -161,7 +168,7 @@ evalSubQuery (ElementTransform sl) row = [(Nothing, Nothing, selectFromRow sl ro
                     opToFunction GTOperator = (>)
         selectColsBySE (IRQ irq) scope = error "You cannot perform an InterRowQuery whilst already within another row's scope"
 
-evalCrossJoinTable :: CrossJoinTable -> [(Maybe String, Maybe Int, String)] ->  IO Table
+evalCrossJoinTable :: CrossJoinTable -> Maybe[(Maybe String, Maybe Int, String)] ->  IO Table
 evalCrossJoinTable (CrossJoinTable tr1 tr2) row = do
   table1 <- evalTableReference tr1 row
   table2 <- evalTableReference tr2 row
@@ -197,7 +204,7 @@ reLabel tbl lbl = do
   return map (\(i, (Just label, _, cols)) -> (Just lbl, Just i, cols)) zippedCols
 
 
-evalConcatJoinTable :: ConcatJoinTable -> [(Maybe String, Maybe Int, String)] -> IO Table
+evalConcatJoinTable :: ConcatJoinTable -> Maybe[(Maybe String, Maybe Int, String)] -> IO Table
 evalConcatJoinTable (ConcatJoinTable tr1 tr2) row = do
   table1 <- evalTableReference tr1 row
   table2 <- evalTableReference tr2 row
