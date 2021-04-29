@@ -9,7 +9,16 @@ import System.IO
 main :: IO ()
 main = catch main' noParse
 
-main' = do (fileName : _ ) <- getArgs
+main' = do 
+          (fileName : _ ) <- getArgs 
+          sourceText <- readFile fileName
+          let lexedProg = alexScanTokens sourceText
+          let parsedProg = parse lexedProg
+          result <- eval parsedProg
+          putStrLn (unparse result)
+
+main'' = do 
+           (fileName : _ ) <- getArgs
            sourceText <- readFile fileName
            putStrLn ("Input program: " ++ sourceText)
            let lexedProg = alexScanTokens sourceText

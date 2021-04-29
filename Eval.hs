@@ -282,8 +282,10 @@ evalWhereClause :: WhereClause -> Table -> Table --TODO: Nothing cases
 evalWhereClause (WhereClause p) scope = [(label, index, [cell | (cell, predResult) <- zip col (applyPredicate p (Just scope)), predResult]) | (label, index, col) <- scope]
 unparse :: Table -> String
 
-unparse tb = unlines (map (intercalate "," ) (transpose (map getRow tb)))
+unparse tb = unlines (sort (map (intercalate "," ) (transpose (map getRow tb))))
   where getRow (_, _, xs) = xs
+
+
 
 processFile :: CSVFile -> IO Table
 processFile (File path) = do
