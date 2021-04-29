@@ -124,33 +124,37 @@ evalJoinedTable (CrossJoinedTable table) row = evalCrossJoinTable table row
 
 evalSubQuery :: SubQuery -> Maybe [(Maybe String, Maybe Int, String)] -> IO Table
 evalSubQuery (SubQuery qs) row = evalQuerySpec qs row
-evalSubQuery (ElementTransform sl) row = [(Nothing, Nothing, selectFromRow sl row)]
+evalSubQuery (ElementTransform sl) row = return [(Nothing, Nothing, selectFromRow sl row)]
   where
     selectFromRow :: SelectList -> Maybe [(Maybe String, Maybe Int, String)] -> [String] --TODO: IO monad stuff
-    selectFromRow sl row = do
-                          subTables <- mapM (\element -> selectColsBySE element row) sl --TODO: shorten infinite length columns to be the length of the rest of the table
-                          return (concat subTables)
+    selectFromRow sl row = concat $ map (\element -> selectColsBySE element row) sl --TODO: shorten infinite length columns to be the length of the rest of the table
       where
         extractContent :: (Maybe String, Maybe Int, String) -> String
         extractContent (_,_,content) = content
-        selectColsBySE :: SelectElement -> [(Maybe String, Maybe Int, String)] -> IO[String]
-        selectColsBySE Asterisk row = return (map extractContent row )
-        selectColsBySE (LabelledAsterisk seLabel) row = return (map extractContent (filter (\(colLabel, index, content) -> colLabel == seLabel) row))
-        selectColsBySE (IdentifiedElement colIdent) scope = return selectColByCI colIdent scope
+        selectColsBySE :: SelectElement -> Maybe [(Maybe String, Maybe Int, String)] -> [String]
+        selectColsBySE Asterisk Nothing = []
+        selectColsBySE Asterisk (Just row) = (map extractContent row )
+        selectColsBySE (LabelledAsterisk _) Nothing = []
+        selectColsBySE (LabelledAsterisk seLabel) (Just row) = map extractContent (filter (\(colLabel, index, content) -> filterOp colLabel) row)
           where
-            selectColByCI :: ColIdent -> [(Maybe String, Maybe Int, String)] -> String
-            selectColByCI (LabelIndex ciLabel ciIndex) row = head (filter (\(colLabel, colIndex, col) -> colLabel == ciLabel && ciIndex == colIndex) row)
-            selectColByCI (Constant ciValue) _ = ciValue
-            selectColByCI (Index index) row = extractContent (row!!index)
+            filterOp :: Maybe String -> Bool
+            filterOp Nothing = False
+            filterOp (Just colLabel) = colLabel == seLabel
+        selectColsBySE (IdentifiedElement colIdent) row = case (selectColByCI colIdent row) of
+                                                           Nothing       -> []
+                                                           (Just output) -> [output]
+          where
+            selectColByCI :: ColIdent -> Maybe [(Maybe String, Maybe Int, String)] -> Maybe String
+            selectColByCI (Constant ciValue) _ = Just ciValue
             selectColByCI (GeneratedColumn (ColGen predicate colA colB)) row = switchOnResult (applyPredicateRow predicate row) colAContents colBContents
               where
-                switchOnResult :: Bool -> String -> String -> String
+                switchOnResult :: Bool -> Maybe String -> Maybe String -> Maybe String
                 switchOnResult True aElem _ = aElem
                 switchOnResult False _ bElem = bElem
                 colAContents = selectColByCI colA row
-                colBContents = selectColByCI colA scope
+                colBContents = selectColByCI colA row
 
-                applyPredicateRow :: Predicate -> [(Maybe String, Maybe Int, String)] -> Bool
+                applyPredicateRow :: Predicate -> Maybe [(Maybe String, Maybe Int, String)] -> Bool
                 applyPredicateRow PredValueTrue _ = True
                 applyPredicateRow PredValueFalse _ = False
                 applyPredicateRow (NotOperation predicate) row = not (applyPredicateRow predicate row)
@@ -160,12 +164,19 @@ evalSubQuery (ElementTransform sl) row = [(Nothing, Nothing, selectFromRow sl ro
                     opToFunction AndOperator = (&&)
                     opToFunction OrOperator = (||)
                     opToFunction XOrOperator = (\a b -> (a||b) && not(a==b))
-                applyPredicateRow (ComparisonOperation colA operator colB) row = (opToFunction operator) (selectColByCI colA) (selectColByCI colB)
+                applyPredicateRow (ComparisonOperation colA operator colB) row = applyOperator (opToFunction operator) (selectColByCI colA row) (selectColByCI colB row)
                   where
                     opToFunction :: ComparisonOperator -> (String -> String -> Bool)
                     opToFunction EqualsOperator = (==)
                     opToFunction LTOperator = (<)
                     opToFunction GTOperator = (>)
+                    applyOperator :: (String -> String -> Bool) -> Maybe String -> Maybe String -> Bool
+                    applyOperator _ Nothing _ = False
+                    applyOperator _ _ Nothing = False 
+                    applyOperator op (Just a) (Just b) = op a b
+            selectColByCI _ Nothing = Nothing
+            selectColByCI (LabelIndex ciLabel ciIndex) (Just row) = Just (head [content |(label, index, content) <- row, label == (Just ciLabel), index == (Just ciIndex)])
+            selectColByCI (Index index) (Just row) = Just (extractContent (row!!index))
         selectColsBySE (IRQ irq) scope = error "You cannot perform an InterRowQuery whilst already within another row's scope"
 
 evalCrossJoinTable :: CrossJoinTable -> Maybe[(Maybe String, Maybe Int, String)] ->  IO Table
